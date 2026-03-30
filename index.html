@@ -3,345 +3,375 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gesture Share - Kirim File lewat Gerakan</title>
+    <title>Gesture Share - Stabilized P2P</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- MediaPipe Hands -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
-    <!-- PeerJS untuk P2P -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        .gesture-indicator {
-            transition: all 0.3s ease;
-        }
-        .sending-animation {
-            animation: moveUp 1s ease-in-out infinite;
-        }
+        .sending-animation { animation: moveUp 1s ease-in-out infinite; }
         @keyframes moveUp {
             0% { transform: translateY(0); opacity: 1; }
             100% { transform: translateY(-100px); opacity: 0; }
         }
-        #video-container {
-            transform: scaleX(-1); /* Mirror camera */
+        #video-container { transform: scaleX(-1); }
+        .pulse-blue { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
         }
     </style>
 </head>
 <body class="bg-slate-900 text-white min-h-screen flex flex-col items-center p-4 font-sans">
 
-    <!-- Header -->
-    <header class="w-full max-w-md text-center mb-6">
+    <header class="w-full max-w-md text-center mb-6 pt-4">
         <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
-            GestureShare
+            GestureShare Pro
         </h1>
-        <p class="text-slate-400 text-sm">Kirim file antar HP dengan gestur tangan</p>
+        <p class="text-slate-400 text-sm">Kirim file P2P tanpa kabel & tanpa ribet</p>
     </header>
 
-    <!-- Status & Connection -->
-    <div class="w-full max-w-md bg-slate-800 rounded-2xl p-4 mb-4 border border-slate-700 shadow-xl">
+    <!-- Connection Status Card -->
+    <div class="w-full max-w-md bg-slate-800 rounded-2xl p-5 mb-4 border border-slate-700 shadow-xl">
         <div class="flex items-center justify-between mb-4">
             <div class="flex items-center gap-2">
                 <div id="status-dot" class="w-3 h-3 rounded-full bg-red-500"></div>
-                <span id="status-text" class="text-sm font-medium">Memulai...</span>
+                <span id="status-text" class="text-sm font-medium">Inisialisasi...</span>
             </div>
-            <div class="text-xs text-slate-500">ID Anda: <span id="my-id" class="font-mono text-blue-400">----</span></div>
+            <div class="text-[10px] bg-slate-900 px-2 py-1 rounded border border-slate-700">
+                ID ANDA: <span id="my-id" class="font-mono text-blue-400 font-bold">----</span>
+            </div>
         </div>
 
-        <div id="connection-controls" class="flex flex-col gap-3">
-            <input type="text" id="peer-id-input" placeholder="Masukkan ID teman..." 
-                   class="bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-blue-500 transition-all">
-            <button id="connect-btn" class="bg-blue-600 hover:bg-blue-500 py-2 rounded-lg font-semibold transition-all active:scale-95">
-                Hubungkan Perangkat
+        <div id="connection-controls" class="space-y-3">
+            <div class="relative">
+                <input type="text" id="peer-id-input" placeholder="Masukkan ID tujuan (Contoh: A7B2)" 
+                       class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all uppercase placeholder:normal-case">
+            </div>
+            <button id="connect-btn" class="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-xl font-bold shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2">
+                <i data-lucide="link" class="w-4 h-4"></i> Hubungkan Perangkat
+            </button>
+        </div>
+        
+        <div id="active-connection" class="hidden flex items-center justify-between p-3 bg-blue-900/20 border border-blue-500/30 rounded-xl">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
+                    <i data-lucide="smartphone" class="w-4 h-4 text-white"></i>
+                </div>
+                <div>
+                    <p class="text-xs text-blue-300">Terhubung ke</p>
+                    <p id="connected-id" class="text-sm font-bold uppercase">----</p>
+                </div>
+            </div>
+            <button id="disconnect-btn" class="text-slate-400 hover:text-red-400 p-2">
+                <i data-lucide="x-circle" class="w-5 h-5"></i>
             </button>
         </div>
     </div>
 
-    <!-- Main Workspace -->
+    <!-- Interface Utama -->
     <main class="w-full max-w-md flex flex-col gap-4">
-        <!-- Camera Preview & Gesture Feedback -->
-        <div class="relative bg-black rounded-2xl overflow-hidden aspect-video border-2 border-slate-700 shadow-2xl">
+        <!-- Kamera & Deteksi -->
+        <div class="relative bg-black rounded-3xl overflow-hidden aspect-square border-2 border-slate-700 shadow-2xl">
             <div id="video-container" class="w-full h-full">
                 <video id="input-video" class="hidden"></video>
                 <canvas id="output-canvas" class="w-full h-full object-cover"></canvas>
             </div>
             
-            <!-- Gesture HUD -->
             <div class="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
-                <div id="gesture-label" class="bg-black/50 px-4 py-1 rounded-full text-xs font-bold uppercase tracking-widest mb-2 border border-white/20">
-                    Mencari Tangan...
+                <div id="gesture-label" class="bg-black/60 backdrop-blur-md px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest mb-3 border border-white/10">
+                    Menunggu Kamera...
                 </div>
-                <div id="action-icon" class="w-16 h-16 flex items-center justify-center rounded-full bg-white/10 backdrop-blur-sm border-2 border-white/30">
-                    <i data-lucide="hand" class="w-8 h-8 text-white"></i>
+                <div id="action-icon" class="w-20 h-20 flex items-center justify-center rounded-full bg-white/5 backdrop-blur-sm border border-white/20 transition-all duration-300">
+                    <i data-lucide="hand" class="w-10 h-10 text-white/50"></i>
                 </div>
             </div>
             
-            <!-- Sending Overlay -->
-            <div id="send-overlay" class="absolute inset-0 bg-blue-500/20 hidden items-center justify-center flex-col">
-                <i data-lucide="arrow-up" class="w-12 h-12 text-blue-400 sending-animation"></i>
-                <span class="font-bold text-blue-200">MENGIRIM...</span>
+            <div id="send-overlay" class="absolute inset-0 bg-blue-600/40 backdrop-blur-sm hidden items-center justify-center flex-col z-20">
+                <i data-lucide="rocket" class="w-16 h-16 text-white sending-animation"></i>
+                <span class="font-black text-xl mt-4 tracking-tighter">MELUNCUR!</span>
             </div>
         </div>
 
-        <!-- File Selector -->
+        <!-- File Upload -->
         <div class="bg-slate-800 rounded-2xl p-4 border border-slate-700">
-            <label class="block text-sm font-medium mb-2 text-slate-300">File yang akan dikirim:</label>
-            <div class="flex items-center gap-3">
-                <input type="file" id="file-input" class="hidden">
-                <button onclick="document.getElementById('file-input').click()" class="flex-1 bg-slate-700 hover:bg-slate-600 p-3 rounded-xl border border-dashed border-slate-500 flex flex-col items-center gap-1 transition-all">
-                    <i data-lucide="file-plus" class="w-5 h-5 text-blue-400"></i>
-                    <span id="file-name-display" class="text-xs text-slate-300">Pilih File (Gambar/Doc)</span>
-                </button>
-            </div>
-            <p class="text-[10px] text-slate-500 mt-2 text-center italic">
-                *Tip: Kepalkan tangan untuk "ambil" file, lalu gerakkan tangan ke atas dengan cepat untuk "melempar" file ke HP lain.
-            </p>
+            <input type="file" id="file-input" class="hidden">
+            <button id="select-file-btn" class="w-full bg-slate-700 hover:bg-slate-600 p-4 rounded-xl border-2 border-dashed border-slate-500 flex flex-col items-center gap-2 transition-all">
+                <div class="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
+                    <i data-lucide="file-up" class="w-5 h-5 text-blue-400"></i>
+                </div>
+                <div class="text-center">
+                    <p id="file-name-display" class="text-sm font-bold">Pilih file yang akan dikirim</p>
+                    <p class="text-[10px] text-slate-400">Gambar, Dokumen, atau Video</p>
+                </div>
+            </button>
         </div>
 
-        <!-- Transfers List -->
-        <div id="transfers" class="bg-slate-800/50 rounded-2xl p-4 border border-slate-700 hidden">
-            <h3 class="text-sm font-bold mb-3 flex items-center gap-2">
-                <i data-lucide="download" class="w-4 h-4"></i> Riwayat Transfer
+        <!-- Transfer List -->
+        <div id="transfers-container" class="hidden bg-slate-800/50 rounded-2xl p-4 border border-slate-700">
+            <h3 class="text-xs font-bold text-slate-400 mb-3 flex items-center gap-2 uppercase tracking-widest">
+                <i data-lucide="activity" class="w-3 h-3"></i> Log Transfer
             </h3>
             <div id="transfer-list" class="space-y-2"></div>
         </div>
     </main>
 
-    <!-- Simple Message Box -->
-    <div id="msg-box" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-blue-600 px-6 py-3 rounded-full shadow-2xl opacity-0 pointer-events-none transition-all duration-300 translate-y-10 z-50">
-        <span id="msg-text">Pesan di sini</span>
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white text-slate-900 px-6 py-3 rounded-full shadow-2xl font-bold text-sm opacity-0 pointer-events-none transition-all duration-500 translate-y-10 z-50 flex items-center gap-2">
+        <i data-lucide="info" class="w-4 h-4"></i>
+        <span id="toast-text">Pesan</span>
     </div>
 
     <script>
-        // --- Konfigurasi & State ---
-        let peer;
-        let conn;
-        let selectedFile = null;
-        let isHandClosed = false;
-        let lastY = 0;
-        let isSending = false;
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'gesture-share-v1';
+        let peer, conn, selectedFile, isHandClosed = false, lastY = 0, isSending = false;
         
-        const videoElement = document.getElementById('input-video');
-        const canvasElement = document.getElementById('output-canvas');
-        const canvasCtx = canvasElement.getContext('2d');
-        const statusText = document.getElementById('status-text');
-        const statusDot = document.getElementById('status-dot');
-        const gestureLabel = document.getElementById('gesture-label');
-        const actionIcon = document.getElementById('action-icon');
+        const ui = {
+            video: document.getElementById('input-video'),
+            canvas: document.getElementById('output-canvas'),
+            statusText: document.getElementById('status-text'),
+            statusDot: document.getElementById('status-dot'),
+            myId: document.getElementById('my-id'),
+            peerInput: document.getElementById('peer-id-input'),
+            connectBtn: document.getElementById('connect-btn'),
+            disconnectBtn: document.getElementById('disconnect-btn'),
+            connControls: document.getElementById('connection-controls'),
+            activeConn: document.getElementById('active-connection'),
+            connectedId: document.getElementById('connected-id'),
+            fileInput: document.getElementById('file-input'),
+            fileDisplay: document.getElementById('file-name-display'),
+            selectFileBtn: document.getElementById('select-file-btn'),
+            gestureLabel: document.getElementById('gesture-label'),
+            actionIcon: document.getElementById('action-icon'),
+            sendOverlay: document.getElementById('send-overlay'),
+            transfers: document.getElementById('transfers-container'),
+            transferList: document.getElementById('transfer-list'),
+            toast: document.getElementById('toast'),
+            toastText: document.getElementById('toast-text')
+        };
 
-        // --- Inisialisasi Lucide ---
+        const ctx = ui.canvas.getContext('2d');
         lucide.createIcons();
 
-        // --- Fungsi Notifikasi ---
-        function showMsg(text) {
-            const box = document.getElementById('msg-box');
-            document.getElementById('msg-text').innerText = text;
-            box.classList.remove('opacity-0', 'translate-y-10', 'pointer-events-none');
-            setTimeout(() => {
-                box.classList.add('opacity-0', 'translate-y-10', 'pointer-events-none');
-            }, 3000);
+        function showToast(msg) {
+            ui.toastText.innerText = msg;
+            ui.toast.classList.remove('opacity-0', 'translate-y-10', 'pointer-events-none');
+            setTimeout(() => ui.toast.classList.add('opacity-0', 'translate-y-10', 'pointer-events-none'), 3000);
         }
 
-        // --- Inisialisasi PeerJS ---
+        // --- Core Connectivity ---
         function initPeer() {
-            // Kita menggunakan ID acak singkat untuk memudahkan pengetikan di HP
             const shortId = Math.random().toString(36).substring(2, 6).toUpperCase();
-            peer = new Peer(shortId);
+            peer = new Peer(shortId, { debug: 1 });
 
-            peer.on('open', (id) => {
-                document.getElementById('my-id').innerText = id;
-                statusText.innerText = "Siap Menghubungkan";
-                statusDot.className = "w-3 h-3 rounded-full bg-yellow-500";
+            peer.on('open', id => {
+                ui.myId.innerText = id;
+                ui.statusText.innerText = "Siap menerima koneksi";
+                ui.statusDot.className = "w-3 h-3 rounded-full bg-yellow-500";
             });
 
-            peer.on('connection', (c) => {
-                conn = c;
-                setupConnectionListeners();
-                showMsg("Perangkat terhubung!");
+            peer.on('connection', connection => {
+                if (conn) conn.close(); // Bersihkan koneksi lama jika ada
+                handleIncomingConnection(connection);
             });
 
-            peer.on('error', (err) => {
-                console.error(err);
-                showMsg("Kesalahan: " + err.type);
+            peer.on('error', err => {
+                showToast("Error: " + err.type);
+                resetUI();
             });
+        }
+
+        function handleIncomingConnection(connection) {
+            conn = connection;
+            setupConnectionListeners();
         }
 
         function setupConnectionListeners() {
-            statusText.innerText = "Terhubung dengan: " + conn.peer;
-            statusDot.className = "w-3 h-3 rounded-full bg-green-500";
-            document.getElementById('connection-controls').classList.add('hidden');
-            document.getElementById('transfers').classList.remove('hidden');
+            // Update UI saat benar-benar OPEN
+            conn.on('open', () => {
+                showToast("Berhasil Terhubung!");
+                ui.connectedId.innerText = conn.peer;
+                ui.connControls.classList.add('hidden');
+                ui.activeConn.classList.remove('hidden');
+                ui.transfers.classList.remove('hidden');
+                ui.statusText.innerText = "Terhubung Aktif";
+                ui.statusDot.className = "w-3 h-3 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]";
+            });
 
-            conn.on('data', (data) => {
+            conn.on('data', data => {
                 if (data.type === 'file') {
-                    handleFileReceive(data);
+                    const blob = new Blob([data.data], { type: data.mimeType });
+                    const url = URL.createObjectURL(blob);
+                    addTransferLog(data.name, 'received', url);
+                    showToast("File diterima: " + data.name);
                 }
             });
 
-            conn.on('close', () => {
-                statusText.innerText = "Koneksi Terputus";
-                statusDot.className = "w-3 h-3 rounded-full bg-red-500";
-                document.getElementById('connection-controls').classList.remove('hidden');
+            conn.on('close', resetUI);
+            conn.on('error', (err) => {
+                console.error(err);
+                resetUI();
             });
         }
 
-        document.getElementById('connect-btn').onclick = () => {
-            const remoteId = document.getElementById('peer-id-input').value.toUpperCase();
-            if (!remoteId) return showMsg("Masukkan ID tujuan");
+        function resetUI() {
+            conn = null;
+            ui.connControls.classList.remove('hidden');
+            ui.activeConn.classList.add('hidden');
+            ui.statusText.innerText = "Siap";
+            ui.statusDot.className = "w-3 h-3 rounded-full bg-yellow-500";
+            showToast("Koneksi terputus");
+        }
+
+        ui.connectBtn.onclick = () => {
+            const targetId = ui.peerInput.value.trim().toUpperCase();
+            if (!targetId) return showToast("Masukkan ID tujuan");
+            if (targetId === peer.id) return showToast("Tidak bisa konek ke diri sendiri");
             
-            conn = peer.connect(remoteId);
-            setupConnectionListeners();
+            ui.statusText.innerText = "Menghubungkan...";
+            const connection = peer.connect(targetId, { reliable: true });
+            handleIncomingConnection(connection);
         };
 
-        // --- Penanganan File ---
-        document.getElementById('file-input').onchange = (e) => {
+        ui.disconnectBtn.onclick = () => {
+            if (conn) conn.close();
+        };
+
+        // --- File Logic ---
+        ui.selectFileBtn.onclick = () => ui.fileInput.click();
+        ui.fileInput.onchange = (e) => {
             selectedFile = e.target.files[0];
             if (selectedFile) {
-                document.getElementById('file-name-display').innerText = selectedFile.name;
-                showMsg("File siap dikirim!");
+                ui.fileDisplay.innerText = selectedFile.name;
+                ui.fileDisplay.classList.add('text-blue-400');
+                showToast("File siap dilempar!");
             }
         };
 
-        function sendFile() {
-            if (!conn || !conn.open) return showMsg("Hubungkan perangkat dulu!");
-            if (!selectedFile) return showMsg("Pilih file dulu!");
+        async function sendFile() {
+            // Validasi koneksi ganda
+            if (!conn || !conn.open) {
+                showToast("Gagal: Perangkat tidak terhubung");
+                resetUI();
+                return;
+            }
+            if (!selectedFile) return showToast("Pilih file dulu!");
             if (isSending) return;
 
             isSending = true;
-            document.getElementById('send-overlay').style.display = 'flex';
+            ui.sendOverlay.style.display = 'flex';
 
             const reader = new FileReader();
             reader.onload = () => {
-                conn.send({
-                    type: 'file',
-                    name: selectedFile.name,
-                    mimeType: selectedFile.type,
-                    data: reader.result
-                });
-                
-                setTimeout(() => {
+                try {
+                    conn.send({
+                        type: 'file',
+                        name: selectedFile.name,
+                        mimeType: selectedFile.type,
+                        data: reader.result
+                    });
+                    
+                    setTimeout(() => {
+                        isSending = false;
+                        ui.sendOverlay.style.display = 'none';
+                        addTransferLog(selectedFile.name, 'sent');
+                        showToast("Berhasil terkirim!");
+                    }, 1200);
+                } catch (e) {
+                    showToast("Gagal mengirim data");
                     isSending = false;
-                    document.getElementById('send-overlay').style.display = 'none';
-                    showMsg("Terkirim!");
-                    addTransferToHistory(selectedFile.name, 'sent');
-                }, 1000);
+                    ui.sendOverlay.style.display = 'none';
+                }
             };
             reader.readAsArrayBuffer(selectedFile);
         }
 
-        function handleFileReceive(data) {
-            const blob = new Blob([data.data], { type: data.mimeType });
-            const url = URL.createObjectURL(blob);
-            
-            addTransferToHistory(data.name, 'received', url);
-            showMsg("File diterima: " + data.name);
-        }
-
-        function addTransferToHistory(name, type, url = null) {
-            const list = document.getElementById('transfer-list');
+        function addTransferLog(name, type, url = null) {
             const item = document.createElement('div');
-            item.className = "flex items-center justify-between bg-slate-700/50 p-2 rounded-lg border border-slate-600 text-xs";
+            item.className = "flex items-center justify-between bg-slate-700/30 p-3 rounded-xl border border-slate-600/50 text-[11px]";
+            const icon = type === 'sent' ? 'arrow-up-right' : 'arrow-down-left';
+            const color = type === 'sent' ? 'text-blue-400' : 'text-green-400';
             
-            const icon = type === 'sent' ? 'upload' : 'download';
-            const actionHtml = url ? `<a href="${url}" download="${name}" class="text-blue-400 font-bold">Simpan</a>` : `<span class="text-slate-400">Selesai</span>`;
-
             item.innerHTML = `
-                <div class="flex items-center gap-2 overflow-hidden">
-                    <i data-lucide="${icon}" class="w-3 h-3 shrink-0"></i>
-                    <span class="truncate pr-2">${name}</span>
+                <div class="flex items-center gap-3 overflow-hidden">
+                    <div class="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center shrink-0">
+                        <i data-lucide="${icon}" class="w-3 h-3 ${color}"></i>
+                    </div>
+                    <span class="truncate font-medium">${name}</span>
                 </div>
-                ${actionHtml}
+                ${url ? `<a href="${url}" download="${name}" class="bg-blue-600 px-3 py-1 rounded-md font-bold hover:bg-blue-500">SIMPAN</a>` : `<span class="text-slate-500 italic">Terkirim</span>`}
             `;
-            list.prepend(item);
+            ui.transferList.prepend(item);
             lucide.createIcons();
         }
 
-        // --- Deteksi Gestur (MediaPipe) ---
+        // --- MediaPipe Gesture Logic ---
         function onResults(results) {
-            canvasCtx.save();
-            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+            ctx.save();
+            ctx.clearRect(0, 0, ui.canvas.width, ui.canvas.height);
+            ctx.drawImage(results.image, 0, 0, ui.canvas.width, ui.canvas.height);
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 const landmarks = results.multiHandLandmarks[0];
-                drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#3b82f6', lineWidth: 2});
-                drawLandmarks(canvasCtx, landmarks, {color: '#ffffff', lineWidth: 1, radius: 2});
+                drawConnectors(ctx, landmarks, HAND_CONNECTIONS, {color: '#3b82f6', lineWidth: 2});
+                drawLandmarks(ctx, landmarks, {color: '#ffffff', lineWidth: 1, radius: 2});
 
-                // Deteksi apakah tangan mengepal (Closed Fist)
-                // Logika sederhana: bandingkan jarak ujung jari ke pergelangan tangan
+                // Cek kepalan
                 const wrist = landmarks[0];
-                const fingers = [8, 12, 16, 20]; // Ujung jari telunjuk, tengah, manis, kelingking
+                const fingers = [8, 12, 16, 20];
                 let closedCount = 0;
-                
-                fingers.forEach(index => {
-                    const tip = landmarks[index];
+                fingers.forEach(i => {
+                    const tip = landmarks[i];
                     const dist = Math.sqrt(Math.pow(tip.x - wrist.x, 2) + Math.pow(tip.y - wrist.y, 2));
-                    if (dist < 0.25) closedCount++; // Ambang batas kepalan
+                    if (dist < 0.28) closedCount++;
                 });
 
                 isHandClosed = closedCount >= 3;
                 
-                // Animasi HUD
                 if (isHandClosed) {
-                    gestureLabel.innerText = "Memegang File";
-                    actionIcon.classList.add('bg-blue-500', 'scale-110');
-                    actionIcon.innerHTML = `<i data-lucide="grab" class="w-8 h-8 text-white"></i>`;
-                } else {
-                    gestureLabel.innerText = "Tangan Terbuka";
-                    actionIcon.classList.remove('bg-blue-500', 'scale-110');
-                    actionIcon.innerHTML = `<i data-lucide="hand" class="w-8 h-8 text-white"></i>`;
-                }
-                lucide.createIcons();
-
-                // Deteksi Gerakan "Melempar" (Quick movement upward)
-                const currentY = wrist.y;
-                if (isHandClosed && !isSending) {
-                    const deltaY = lastY - currentY; // Y berkurang berarti naik ke atas
-                    if (deltaY > 0.15) { // Threshold kecepatan lemparan
+                    ui.gestureLabel.innerText = "Genggaman Terdeteksi";
+                    ui.actionIcon.classList.add('bg-blue-500', 'scale-125', 'pulse-blue');
+                    ui.actionIcon.innerHTML = `<i data-lucide="package-check" class="w-10 h-10 text-white"></i>`;
+                    
+                    // Deteksi kecepatan gerakan naik (Lemparkan)
+                    const currentY = wrist.y;
+                    const deltaY = lastY - currentY;
+                    if (deltaY > 0.12 && !isSending) { 
                         sendFile();
                     }
+                    lastY = currentY;
+                } else {
+                    ui.gestureLabel.innerText = "Tangan Terbuka";
+                    ui.actionIcon.classList.remove('bg-blue-500', 'scale-125', 'pulse-blue');
+                    ui.actionIcon.innerHTML = `<i data-lucide="hand" class="w-10 h-10 text-white/50"></i>`;
+                    lastY = wrist.y;
                 }
-                lastY = currentY;
+                lucide.createIcons();
             } else {
-                gestureLabel.innerText = "Mencari Tangan...";
+                ui.gestureLabel.innerText = "Posisikan Tangan...";
                 isHandClosed = false;
             }
-            canvasCtx.restore();
+            ctx.restore();
         }
 
-        const hands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-        });
-
-        hands.setOptions({
-            maxNumHands: 1,
-            modelComplexity: 1,
-            minDetectionConfidence: 0.7,
-            minTrackingConfidence: 0.7
-        });
+        const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.75, minTrackingConfidence: 0.75 });
         hands.onResults(onResults);
 
-        const camera = new Camera(videoElement, {
-            onFrame: async () => {
-                await hands.send({image: videoElement});
-            },
-            width: 640,
-            height: 480
+        const camera = new Camera(ui.video, {
+            onFrame: async () => { await hands.send({image: ui.video}); },
+            width: 640, height: 640
         });
 
-        // Start App
         window.onload = () => {
             initPeer();
-            camera.start();
-            
-            // Atur ukuran canvas sesuai aspect ratio video
-            setTimeout(() => {
-                canvasElement.width = videoElement.videoWidth || 640;
-                canvasElement.height = videoElement.videoHeight || 480;
-            }, 1000);
+            camera.start().then(() => {
+                ui.canvas.width = 640;
+                ui.canvas.height = 640;
+            });
         };
     </script>
 </body>
 </html>
+
