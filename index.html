@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GestureShare Global - Kirim File via Internet</title>
+    <title>GestureShare Global - Antar Jaringan</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
@@ -11,225 +11,248 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        .sending-animation { animation: flyUp 0.8s ease-in-out infinite; }
-        @keyframes flyUp {
-            0% { transform: translateY(0) scale(1); opacity: 1; }
-            100% { transform: translateY(-120px) scale(0.5); opacity: 0; }
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;500;700&display=swap');
+        
+        body { font-family: 'Space Grotesk', sans-serif; overflow-x: hidden; }
+        
+        .portal-gradient {
+            background: radial-gradient(circle, rgba(59,130,246,0.3) 0%, rgba(30,41,59,0) 70%);
         }
-        #video-container { transform: scaleX(-1); }
-        .bg-glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); }
-        .status-pulse { animation: pulse-shadow 2s infinite; }
-        @keyframes pulse-shadow {
-            0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5); }
-            70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        
+        .launch-animation {
+            animation: hyperLaunch 0.6s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+        }
+        
+        @keyframes hyperLaunch {
+            0% { transform: translate(-50%, 0) scale(1); opacity: 1; filter: blur(0px); }
+            100% { transform: translate(-50%, -500px) scale(0.1); opacity: 0; filter: blur(10px); }
+        }
+
+        #cam-container {
+            transition: opacity 0.3s ease-in-out;
         }
     </style>
 </head>
-<body class="bg-slate-950 text-white min-h-screen flex flex-col items-center p-4 font-sans">
+<body class="bg-slate-950 text-slate-100 min-h-screen p-4 flex flex-col items-center">
 
-    <!-- Header -->
-    <header class="w-full max-w-md flex justify-between items-center mb-6 pt-2">
+    <!-- Dekorasi Latar Belakang -->
+    <div class="fixed inset-0 pointer-events-none opacity-20">
+        <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600 rounded-full blur-[120px]"></div>
+        <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600 rounded-full blur-[120px]"></div>
+    </div>
+
+    <!-- Bagian Header -->
+    <header class="w-full max-w-md z-10 py-6 flex justify-between items-center">
         <div>
-            <h1 class="text-2xl font-black tracking-tighter text-blue-500">GS.GLOBAL</h1>
-            <p class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">P2P Gesture Transfer</p>
+            <h1 class="text-3xl font-bold tracking-tighter bg-gradient-to-r from-white to-blue-400 bg-clip-text text-transparent">HYPERBEAM</h1>
+            <p class="text-[10px] tracking-[0.4em] uppercase text-blue-500 font-bold">Global P2P Transfer</p>
         </div>
-        <div id="connection-badge" class="px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-[10px] font-bold flex items-center gap-2">
-            <div id="status-dot" class="w-2 h-2 rounded-full bg-red-500"></div>
-            <span id="status-text">OFFLINE</span>
+        <div class="flex flex-col items-end gap-2">
+            <div id="connection-indicator" class="flex items-center gap-2 px-3 py-1 bg-slate-900 border border-slate-800 rounded-full">
+                <div id="status-dot" class="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_5px_#ef4444]"></div>
+                <span id="status-text" class="text-[10px] font-bold">OFFLINE</span>
+            </div>
         </div>
     </header>
 
-    <!-- Connection Hub -->
-    <div class="w-full max-w-md space-y-3 mb-6">
-        <!-- My ID Card -->
-        <div class="bg-glass border border-slate-800 rounded-3xl p-5 shadow-2xl relative overflow-hidden">
-            <div class="flex justify-between items-start mb-4">
+    <!-- Pusat Koneksi -->
+    <div class="w-full max-w-md z-10 space-y-4 mb-6">
+        <div class="bg-slate-900/80 border border-slate-800 rounded-[2rem] p-6 backdrop-blur-xl shadow-2xl relative overflow-hidden group">
+            <div class="relative z-10 flex justify-between items-center">
                 <div>
-                    <h2 class="text-xs text-slate-400 font-bold uppercase mb-1">ID Perangkat Anda</h2>
-                    <p id="my-id" class="text-3xl font-mono font-black tracking-widest text-white">----</p>
+                    <h2 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">ID Perangkat Anda</h2>
+                    <div class="flex items-center gap-3">
+                        <span id="my-id-display" class="text-3xl font-mono font-black tracking-widest">-----</span>
+                        <button id="copy-btn" class="p-2 hover:text-blue-400 transition-colors">
+                            <i data-lucide="copy" class="w-4 h-4"></i>
+                        </button>
+                    </div>
                 </div>
-                <button id="copy-link-btn" class="bg-blue-600 hover:bg-blue-500 p-3 rounded-2xl transition-all active:scale-90 shadow-lg shadow-blue-500/20">
-                    <i data-lucide="share-2" class="w-5 h-5"></i>
+                <button id="share-btn" class="bg-blue-600 hover:bg-blue-500 p-4 rounded-2xl shadow-lg shadow-blue-600/30 transition-all active:scale-95 group">
+                    <i data-lucide="send" class="w-6 h-6 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform"></i>
                 </button>
             </div>
-            <p class="text-[10px] text-slate-500">Bagikan ID atau Link ini ke teman di mana saja.</p>
-        </div>
-
-        <!-- Target Input (Hidden if connected) -->
-        <div id="connect-ui" class="flex gap-2">
-            <input type="text" id="peer-id-input" placeholder="Masukkan ID teman..." 
-                   class="flex-1 bg-slate-900 border border-slate-800 rounded-2xl px-5 py-4 text-sm focus:outline-none focus:border-blue-500 transition-all uppercase font-mono tracking-widest">
-            <button id="connect-btn" class="bg-white text-black px-6 rounded-2xl font-bold text-sm hover:bg-slate-200 transition-all active:scale-95">
-                Konek
-            </button>
-        </div>
-
-        <!-- Connected Status -->
-        <div id="active-ui" class="hidden bg-blue-600/10 border border-blue-500/30 rounded-3xl p-4 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center status-pulse">
-                    <i data-lucide="zap" class="w-5 h-5"></i>
-                </div>
-                <div>
-                    <p class="text-[10px] font-bold text-blue-400 uppercase">Terhubung dengan</p>
-                    <p id="connected-id" class="text-sm font-mono font-bold tracking-widest">----</p>
-                </div>
+            <div class="mt-4 pt-4 border-t border-slate-800/50 flex gap-2" id="connect-input-container">
+                <input type="text" id="target-id-input" placeholder="Masukkan ID teman..." 
+                       class="flex-1 bg-black/40 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-all uppercase font-mono tracking-widest">
+                <button id="connect-btn" class="px-6 bg-white text-black rounded-xl font-bold text-sm hover:bg-blue-50 transition-all">Hubungkan</button>
             </div>
-            <button id="disconnect-btn" class="bg-red-500/10 hover:bg-red-500/20 text-red-500 p-2 rounded-xl transition-all">
-                <i data-lucide="log-out" class="w-5 h-5"></i>
-            </button>
+
+            <div id="connected-badge" class="hidden mt-4 pt-4 border-t border-slate-800/50 flex items-center justify-between">
+                <div class="flex items-center gap-3 text-blue-400">
+                    <i data-lucide="link" class="w-4 h-4"></i>
+                    <span class="text-sm font-bold tracking-widest" id="peer-id-label">TERHUBUNG: ---</span>
+                </div>
+                <button id="disconnect-btn" class="text-red-400 text-xs font-bold hover:underline">PUTUSKAN</button>
+            </div>
         </div>
     </div>
 
-    <!-- Interface Gesture -->
-    <main class="w-full max-w-md flex flex-col gap-4">
-        <div class="relative bg-slate-900 rounded-[2rem] overflow-hidden aspect-square border border-slate-800 shadow-inner">
-            <div id="video-container" class="w-full h-full opacity-60">
-                <video id="input-video" class="hidden"></video>
-                <canvas id="output-canvas" class="w-full h-full object-cover"></canvas>
-            </div>
-            
-            <!-- HUD -->
-            <div class="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
-                <div id="gesture-indicator" class="w-24 h-24 rounded-full border-4 border-dashed border-white/20 flex items-center justify-center transition-all duration-300">
-                    <i data-lucide="hand" id="hand-icon" class="w-10 h-10 text-white/30"></i>
-                </div>
-                <p id="gesture-text" class="mt-4 text-[10px] font-black uppercase tracking-[0.3em] text-white/40">Mencari Tangan</p>
-            </div>
-            
-            <!-- Send Effect -->
-            <div id="send-overlay" class="absolute inset-0 bg-blue-500/30 backdrop-blur-md hidden items-center justify-center flex-col z-30">
-                <i data-lucide="send" class="w-16 h-16 text-white sending-animation"></i>
-                <h3 class="text-2xl font-black italic mt-4">TERKIRIM!</h3>
-            </div>
-        </div>
-
-        <!-- File Picker -->
-        <div class="grid grid-cols-1 gap-3">
-            <input type="file" id="file-input" class="hidden">
-            <button id="file-btn" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 p-5 rounded-3xl flex items-center justify-between transition-all group">
-                <div class="flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                        <i data-lucide="paperclip" class="w-6 h-6 text-blue-500"></i>
-                    </div>
-                    <div class="text-left">
-                        <p id="file-name" class="text-sm font-bold">Pilih Dokumen/Gambar</p>
-                        <p class="text-[10px] text-slate-500">Ukuran file maksimal: 50MB</p>
-                    </div>
-                </div>
-                <i data-lucide="chevron-right" class="w-5 h-5 text-slate-600"></i>
+    <!-- Area Gestur -->
+    <main class="w-full max-w-md z-10 flex flex-col gap-4">
+        <div class="relative aspect-square rounded-[2.5rem] overflow-hidden bg-slate-900 border border-slate-800 group shadow-2xl">
+            <!-- Tombol Toggle Kamera -->
+            <button id="toggle-camera-btn" class="absolute top-4 right-4 z-50 p-3 bg-black/50 hover:bg-black/80 rounded-2xl backdrop-blur-md border border-white/10 transition-all">
+                <i data-lucide="camera" id="cam-icon" class="w-5 h-5 text-white"></i>
             </button>
+
+            <div id="cam-container" class="w-full h-full opacity-0">
+                <video id="webcam" class="hidden" playsinline></video>
+                <canvas id="output-canvas" class="w-full h-full object-cover scale-x-[-1]"></canvas>
+            </div>
+            
+            <div id="cam-placeholder" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-900">
+                <div class="w-20 h-20 rounded-3xl bg-slate-800 flex items-center justify-center mb-4">
+                    <i data-lucide="camera-off" class="w-10 h-10 text-slate-600"></i>
+                </div>
+                <p class="text-xs font-bold text-slate-500 uppercase tracking-widest">Kamera Dinonaktifkan</p>
+                <button id="enable-cam-hint" class="mt-4 text-blue-500 text-[10px] font-bold hover:underline uppercase">Aktifkan Kamera</button>
+            </div>
+            
+            <!-- Overlay Gestur HUD -->
+            <div id="gesture-hud" class="absolute inset-0 pointer-events-none flex flex-col items-center justify-center hidden">
+                <div id="portal-ui" class="w-40 h-40 rounded-full flex items-center justify-center transition-all duration-300 portal-gradient border border-white/5">
+                    <div id="gesture-icon-box" class="w-16 h-16 rounded-full bg-slate-800/60 border border-white/10 flex items-center justify-center backdrop-blur-md">
+                        <i data-lucide="hand" id="hand-icon" class="w-8 h-8 text-white/40"></i>
+                    </div>
+                </div>
+                <div class="mt-4 text-center">
+                    <p id="gesture-state-text" class="text-[9px] font-black tracking-[0.4em] uppercase text-white/30">Mendeteksi Tangan</p>
+                </div>
+            </div>
+
+            <!-- Payload Meluncur (Visual File) -->
+            <div id="payload" class="absolute left-1/2 bottom-20 -translate-x-1/2 pointer-events-none hidden z-50">
+                <div class="w-16 h-16 bg-blue-500 rounded-2xl flex items-center justify-center shadow-[0_0_30px_#3b82f6]">
+                    <i data-lucide="package" class="w-8 h-8 text-white"></i>
+                </div>
+            </div>
         </div>
 
-        <!-- Logs -->
-        <div id="log-container" class="mt-2 hidden">
-            <div id="log-list" class="space-y-2"></div>
+        <!-- Kontrol File -->
+        <div class="bg-slate-900/50 border border-slate-800 rounded-3xl p-4 backdrop-blur-md">
+            <input type="file" id="file-selector" class="hidden">
+            <div class="flex flex-col gap-3">
+                <button id="pick-file-btn" class="w-full py-4 border-2 border-dashed border-slate-700 rounded-2xl flex items-center justify-center gap-3 hover:border-blue-500 hover:bg-blue-500/5 transition-all group">
+                    <i data-lucide="file-plus" class="w-5 h-5 text-slate-500 group-hover:text-blue-500"></i>
+                    <span id="selected-file-name" class="text-sm font-medium text-slate-400 group-hover:text-slate-100">Pilih File</span>
+                </button>
+                
+                <!-- Tombol Kirim Manual (Jika kamera mati) -->
+                <button id="manual-send-btn" class="hidden w-full py-4 bg-blue-600 hover:bg-blue-500 rounded-2xl font-bold text-sm shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center gap-2">
+                    <i data-lucide="rocket" class="w-4 h-4"></i> KIRIM FILE SEKARANG
+                </button>
+            </div>
+            <p id="instruction-text" class="text-[10px] text-center text-slate-600 mt-3 italic uppercase tracking-wider">Berikan izin kamera untuk menggunakan gestur</p>
+        </div>
+
+        <!-- Riwayat Transfer -->
+        <div id="history-box" class="hidden">
+            <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 ml-2 text-center">Sinkronisasi File</h3>
+            <div id="transfer-logs" class="space-y-2"></div>
         </div>
     </main>
 
-    <!-- Message Toast -->
-    <div id="toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-blue-600 px-8 py-3 rounded-2xl shadow-2xl text-sm font-bold opacity-0 transition-all duration-500 translate-y-20 z-50 whitespace-nowrap">
-        Pesan Notifikasi
+    <!-- Notifikasi Toast -->
+    <div id="notif" class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-blue-600 px-8 py-3 rounded-2xl shadow-2xl text-xs font-bold opacity-0 transition-all duration-500 translate-y-20 z-[100]">
+        NOTIFIKASI
     </div>
 
     <script>
-        let peer, conn, selectedFile, isSending = false, lastY = 0;
+        const peerConfig = {
+            config: {
+                'iceServers': [
+                    { url: 'stun:stun.l.google.com:19302' },
+                    { url: 'stun:stun1.l.google.com:19302' },
+                    { url: 'stun:stun2.l.google.com:19302' },
+                    { url: 'stun:stun.services.mozilla.com' },
+                    { url: 'stun:global.stun.twilio.com:3478' }
+                ]
+            },
+            debug: 1
+        };
+
+        let peer, conn, selectedFile, isSending = false, lastY = 0, isCameraActive = false;
+        let cameraInstance = null;
+
         const ui = {
-            myId: document.getElementById('my-id'),
-            peerInput: document.getElementById('peer-id-input'),
+            myIdDisplay: document.getElementById('my-id-display'),
+            targetIdInput: document.getElementById('target-id-input'),
             statusText: document.getElementById('status-text'),
             statusDot: document.getElementById('status-dot'),
             connectBtn: document.getElementById('connect-btn'),
             disconnectBtn: document.getElementById('disconnect-btn'),
-            connectUi: document.getElementById('connect-ui'),
-            activeUi: document.getElementById('active-ui'),
-            connectedId: document.getElementById('connected-id'),
-            fileInput: document.getElementById('file-input'),
-            fileBtn: document.getElementById('file-btn'),
-            fileName: document.getElementById('file-name'),
-            gestureText: document.getElementById('gesture-text'),
-            gestureIcon: document.getElementById('hand-icon'),
-            gestureCircle: document.getElementById('gesture-indicator'),
-            sendOverlay: document.getElementById('send-overlay'),
-            logList: document.getElementById('log-list'),
-            logContainer: document.getElementById('log-container'),
-            copyBtn: document.getElementById('copy-link-btn')
+            inputContainer: document.getElementById('connect-input-container'),
+            connectedBadge: document.getElementById('connected-badge'),
+            peerLabel: document.getElementById('peer-id-label'),
+            fileSelector: document.getElementById('file-selector'),
+            pickFileBtn: document.getElementById('pick-file-btn'),
+            fileName: document.getElementById('selected-file-name'),
+            gestureText: document.getElementById('gesture-state-text'),
+            handIcon: document.getElementById('hand-icon'),
+            portal: document.getElementById('portal-ui'),
+            payload: document.getElementById('payload'),
+            notif: document.getElementById('notif'),
+            transferLogs: document.getElementById('transfer-logs'),
+            historyBox: document.getElementById('history-box'),
+            camContainer: document.getElementById('cam-container'),
+            camPlaceholder: document.getElementById('cam-placeholder'),
+            toggleCamBtn: document.getElementById('toggle-camera-btn'),
+            camIcon: document.getElementById('cam-icon'),
+            gestureHud: document.getElementById('gesture-hud'),
+            manualSendBtn: document.getElementById('manual-send-btn'),
+            instruction: document.getElementById('instruction-text')
         };
 
-        const canvas = document.getElementById('output-canvas');
-        const ctx = canvas.getContext('2d');
         lucide.createIcons();
 
-        function notify(msg) {
-            const t = document.getElementById('toast');
-            t.innerText = msg;
-            t.classList.remove('opacity-0', 'translate-y-20');
-            setTimeout(() => t.classList.add('opacity-0', 'translate-y-20'), 3000);
+        function showNotif(msg) {
+            ui.notif.innerText = msg;
+            ui.notif.classList.remove('opacity-0', 'translate-y-20');
+            setTimeout(() => ui.notif.classList.add('opacity-0', 'translate-y-20'), 3000);
         }
 
-        // --- Koneksi PeerJS Global ---
-        function initPeer() {
-            // Menggunakan ID acak yang mudah diingat
-            const randomId = Math.random().toString(36).substring(2, 7).toUpperCase();
-            
-            // Konfigurasi PeerJS default menggunakan server STUN Google untuk P2P Internet
-            peer = new Peer(randomId, {
-                config: {
-                    'iceServers': [
-                        { url: 'stun:stun.l.google.com:19302' },
-                        { url: 'stun:stun1.l.google.com:19302' }
-                    ]
-                },
-                debug: 1
-            });
+        // --- Logika PeerJS ---
+        function initializePeer() {
+            const uniqueId = Math.random().toString(36).substring(2, 7).toUpperCase();
+            peer = new Peer(uniqueId, peerConfig);
 
-            peer.on('open', id => {
-                ui.myId.innerText = id;
+            peer.on('open', (id) => {
+                ui.myIdDisplay.innerText = id;
                 ui.statusText.innerText = "ONLINE";
-                ui.statusDot.className = "w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]";
+                ui.statusDot.className = "w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_10px_#3b82f6]";
                 
-                // Cek jika ada ID di URL untuk auto-konek
-                const hash = window.location.hash.replace('#', '');
-                if (hash && hash.length === 5) {
-                    ui.peerInput.value = hash;
+                const hashId = window.location.hash.replace('#', '');
+                if (hashId && hashId.length === 5) {
+                    ui.targetIdInput.value = hashId;
                     setTimeout(connectToPeer, 1000);
                 }
             });
 
-            peer.on('connection', c => {
-                if (conn) conn.close();
-                handleConnection(c);
-            });
-
-            peer.on('error', err => {
-                console.error(err);
-                if (err.type === 'peer-disconnected') notify("Koneksi internet terputus.");
-                else if (err.type === 'unavailable-id') notify("ID tidak ditemukan.");
-                else notify("Terjadi masalah jaringan.");
+            peer.on('connection', setupConnection);
+            peer.on('error', (err) => {
+                console.error("Peer Error:", err);
                 resetUI();
             });
         }
 
-        function handleConnection(c) {
+        function setupConnection(c) {
+            if (conn) conn.close();
             conn = c;
-            
             conn.on('open', () => {
-                notify("Berhasil terhubung secara Global!");
-                ui.connectedId.innerText = conn.peer;
-                ui.connectUi.classList.add('hidden');
-                ui.activeUi.classList.remove('hidden');
-                ui.logContainer.classList.remove('hidden');
-                ui.statusText.innerText = "TERHUBUNG";
-                ui.statusDot.className = "w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]";
+                showNotif("Sinkronisasi Berhasil!");
+                ui.peerLabel.innerText = "TERHUBUNG: " + conn.peer;
+                ui.inputContainer.classList.add('hidden');
+                ui.connectedBadge.classList.remove('hidden');
+                ui.historyBox.classList.remove('hidden');
+                ui.statusText.innerText = "LINKED";
+                ui.statusDot.className = "w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_#22c55e]";
+                updateManualSendVisibility();
             });
 
-            conn.on('data', data => {
-                if (data.type === 'file') {
-                    const blob = new Blob([data.data], { type: data.mimeType });
-                    const url = URL.createObjectURL(blob);
-                    addLog(data.name, 'received', url);
-                    notify("Ada file masuk: " + data.name);
+            conn.on('data', (data) => {
+                if (data.type === 'file-transfer') {
+                    handleIncomingFile(data);
                 }
             });
 
@@ -237,145 +260,214 @@
         }
 
         function connectToPeer() {
-            const target = ui.peerInput.value.trim().toUpperCase();
-            if (!target) return notify("Masukkan ID tujuan");
-            if (target === peer.id) return notify("Ini ID Anda sendiri");
-            
-            ui.statusText.innerText = "MENGHUBUNGKAN...";
+            const target = ui.targetIdInput.value.trim().toUpperCase();
+            if (!target || target === peer.id) return;
+            ui.statusText.innerText = "CONNECTING...";
             const connection = peer.connect(target, { reliable: true });
-            handleConnection(connection);
+            setupConnection(connection);
         }
 
         function resetUI() {
             conn = null;
-            ui.connectUi.classList.remove('hidden');
-            ui.activeUi.classList.add('hidden');
+            ui.inputContainer.classList.remove('hidden');
+            ui.connectedBadge.classList.add('hidden');
             ui.statusText.innerText = "ONLINE";
             ui.statusDot.className = "w-2 h-2 rounded-full bg-blue-500";
+            updateManualSendVisibility();
         }
 
+        // --- Kamera & Gestur ---
+        async function startCamera() {
+            try {
+                if (!cameraInstance) {
+                    cameraInstance = new Camera(document.getElementById('webcam'), {
+                        onFrame: async () => { 
+                            if (isCameraActive) await hands.send({image: document.getElementById('webcam')}); 
+                        },
+                        width: 640, height: 640
+                    });
+                }
+                await cameraInstance.start();
+                isCameraActive = true;
+                ui.camContainer.classList.replace('opacity-0', 'opacity-100');
+                ui.camPlaceholder.classList.add('hidden');
+                ui.gestureHud.classList.remove('hidden');
+                ui.camIcon.setAttribute('data-lucide', 'camera-off');
+                ui.instruction.innerText = "Kepal untuk kunci, lempar untuk kirim";
+                updateManualSendVisibility();
+            } catch (err) {
+                console.error("Camera error:", err);
+                showNotif("Gagal akses kamera.");
+                stopCamera();
+            }
+            lucide.createIcons();
+        }
+
+        function stopCamera() {
+            isCameraActive = false;
+            if (cameraInstance) {
+                const video = document.getElementById('webcam');
+                const stream = video.srcObject;
+                if (stream) stream.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+            }
+            ui.camContainer.classList.replace('opacity-100', 'opacity-0');
+            ui.camPlaceholder.classList.remove('hidden');
+            ui.gestureHud.classList.add('hidden');
+            ui.camIcon.setAttribute('data-lucide', 'camera');
+            ui.instruction.innerText = "Mode Manual Aktif";
+            updateManualSendVisibility();
+            lucide.createIcons();
+        }
+
+        function updateManualSendVisibility() {
+            if (!isCameraActive && selectedFile && conn && conn.open) {
+                ui.manualSendBtn.classList.remove('hidden');
+            } else {
+                ui.manualSendBtn.classList.add('hidden');
+            }
+        }
+
+        // --- Interaksi ---
+        ui.toggleCamBtn.onclick = () => isCameraActive ? stopCamera() : startCamera();
         ui.connectBtn.onclick = connectToPeer;
         ui.disconnectBtn.onclick = () => conn && conn.close();
+        ui.pickFileBtn.onclick = () => ui.fileSelector.click();
+        ui.manualSendBtn.onclick = launchFile;
+        document.getElementById('enable-cam-hint').onclick = startCamera;
         
-        ui.copyBtn.onclick = () => {
-            const link = `${window.location.origin}${window.location.pathname}#${peer.id}`;
-            // Gunakan metode standar untuk copy
+        ui.fileSelector.onchange = (e) => {
+            selectedFile = e.target.files[0];
+            if (selectedFile) {
+                ui.fileName.innerText = selectedFile.name;
+                ui.fileName.classList.replace('text-slate-400', 'text-blue-400');
+                showNotif("File Siap.");
+                updateManualSendVisibility();
+            }
+        };
+
+        document.getElementById('share-btn').onclick = () => {
+            const url = `${window.location.origin}${window.location.pathname}#${peer.id}`;
             const el = document.createElement('textarea');
-            el.value = link;
+            el.value = url;
             document.body.appendChild(el);
             el.select();
             document.execCommand('copy');
             document.body.removeChild(el);
-            notify("Link koneksi disalin! Kirim ke teman.");
+            showNotif("Link disalin!");
         };
 
-        // --- File Logic ---
-        ui.fileBtn.onclick = () => ui.fileInput.click();
-        ui.fileInput.onchange = (e) => {
-            selectedFile = e.target.files[0];
-            if (selectedFile) {
-                ui.fileName.innerText = selectedFile.name;
-                ui.fileName.className = "text-sm font-bold text-blue-400";
-                notify("Siap! Lakukan gerakan melempar.");
-            }
+        document.getElementById('copy-btn').onclick = () => {
+            const el = document.createElement('textarea');
+            el.value = peer.id;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            showNotif("ID Disalin!");
         };
 
-        async function sendFile() {
-            if (!conn || !conn.open) return notify("Gagal: Perangkat tidak terhubung");
-            if (!selectedFile) return notify("Pilih file dulu!");
-            if (isSending) return;
+        async function launchFile() {
+            if (!conn || !conn.open) return showNotif("Belum terhubung!");
+            if (!selectedFile || isSending) return;
 
             isSending = true;
-            ui.sendOverlay.style.display = 'flex';
+            ui.payload.classList.remove('hidden');
+            ui.payload.classList.add('launch-animation');
 
             const reader = new FileReader();
             reader.onload = () => {
-                try {
-                    conn.send({
-                        type: 'file',
-                        name: selectedFile.name,
-                        mimeType: selectedFile.type,
-                        data: reader.result
-                    });
-                    
-                    setTimeout(() => {
-                        isSending = false;
-                        ui.sendOverlay.style.display = 'none';
-                        addLog(selectedFile.name, 'sent');
-                        notify("File terkirim lewat internet!");
-                    }, 1500);
-                } catch (e) {
+                conn.send({
+                    type: 'file-transfer',
+                    name: selectedFile.name,
+                    mime: selectedFile.type,
+                    data: reader.result
+                });
+
+                setTimeout(() => {
+                    ui.payload.classList.add('hidden');
+                    ui.payload.classList.remove('launch-animation');
+                    addLog(selectedFile.name, 'sent');
                     isSending = false;
-                    ui.sendOverlay.style.display = 'none';
-                    notify("Gagal mengirim file.");
-                }
+                    showNotif("Berhasil Terkirim!");
+                }, 700);
             };
             reader.readAsArrayBuffer(selectedFile);
         }
 
+        function handleIncomingFile(data) {
+            const blob = new Blob([data.data], { type: data.mime });
+            const url = URL.createObjectURL(blob);
+            addLog(data.name, 'received', url);
+            showNotif("File masuk!");
+        }
+
         function addLog(name, type, url = null) {
             const div = document.createElement('div');
-            div.className = "bg-slate-900 border border-slate-800 p-3 rounded-2xl flex items-center justify-between animate-in fade-in slide-in-from-bottom-2 duration-500";
+            div.className = "bg-slate-900 border border-slate-800 p-4 rounded-2xl flex items-center justify-between";
             const isSent = type === 'sent';
             
             div.innerHTML = `
                 <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-full ${isSent ? 'bg-blue-500/20' : 'bg-green-500/20'} flex items-center justify-center">
-                        <i data-lucide="${isSent ? 'upload-cloud' : 'download-cloud'}" class="w-4 h-4 ${isSent ? 'text-blue-500' : 'text-green-500'}"></i>
+                    <div class="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center">
+                        <i data-lucide="${isSent ? 'arrow-up-right' : 'arrow-down-left'}" class="w-4 h-4 ${isSent ? 'text-blue-500' : 'text-green-500'}"></i>
                     </div>
-                    <div class="max-w-[150px]">
-                        <p class="text-[11px] font-bold truncate text-slate-200">${name}</p>
-                        <p class="text-[9px] text-slate-500 uppercase font-black">${isSent ? 'Terkirim' : 'Diterima'}</p>
+                    <div class="overflow-hidden max-w-[140px]">
+                        <p class="text-xs font-bold truncate">${name}</p>
+                        <p class="text-[8px] uppercase tracking-tighter text-slate-500 font-black">${type}</p>
                     </div>
                 </div>
-                ${url ? `<a href="${url}" download="${name}" class="bg-blue-600 text-[10px] font-black px-4 py-2 rounded-xl">SIMPAN</a>` : `<span class="text-[9px] text-slate-600 font-bold px-2">SUCCESS</span>`}
+                ${url ? `<a href="${url}" download="${name}" class="bg-white text-black text-[9px] font-black px-4 py-2 rounded-lg hover:bg-blue-400 transition-colors">UNDUH</a>` : `<span class="text-[8px] font-black text-blue-500">BERHASIL</span>`}
             `;
-            ui.logList.prepend(div);
+            ui.transferLogs.prepend(div);
             lucide.createIcons();
         }
 
-        // --- Gesture MediaPipe Logic ---
+        // --- MediaPipe Results ---
+        const canvas = document.getElementById('output-canvas');
+        const ctx = canvas.getContext('2d');
+
         function onResults(results) {
+            if (!isCameraActive) return;
             ctx.save();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                const landmarks = results.multiHandLandmarks[0];
-                drawConnectors(ctx, landmarks, HAND_CONNECTIONS, {color: '#3b82f6', lineWidth: 3});
-                drawLandmarks(ctx, landmarks, {color: '#ffffff', lineWidth: 1, radius: 3});
+                const hand = results.multiHandLandmarks[0];
+                drawConnectors(ctx, hand, HAND_CONNECTIONS, {color: '#3b82f6', lineWidth: 3});
+                drawLandmarks(ctx, hand, {color: '#ffffff', lineWidth: 1, radius: 2});
 
-                const wrist = landmarks[0];
+                const wrist = hand[0];
                 const fingers = [8, 12, 16, 20];
-                let closed = 0;
+                let closeCount = 0;
                 fingers.forEach(i => {
-                    const tip = landmarks[i];
+                    const tip = hand[i];
                     const dist = Math.sqrt(Math.pow(tip.x - wrist.x, 2) + Math.pow(tip.y - wrist.y, 2));
-                    if (dist < 0.28) closed++;
+                    if (dist < 0.28) closeCount++;
                 });
 
-                const handIsClosed = closed >= 3;
-                
-                if (handIsClosed) {
-                    ui.gestureText.innerText = "File Digenggam";
+                const isClosed = closeCount >= 3;
+
+                if (isClosed) {
+                    ui.gestureText.innerText = "SIAP LEMPAR";
                     ui.gestureText.classList.add('text-blue-400');
-                    ui.gestureCircle.className = "w-24 h-24 rounded-full border-4 border-blue-500 flex items-center justify-center bg-blue-500/20 scale-110 transition-all";
-                    ui.gestureIcon.innerHTML = `<i data-lucide="package" class="w-10 h-10 text-white"></i>`;
+                    ui.portal.classList.replace('portal-gradient', 'bg-blue-500/20');
+                    ui.handIcon.innerHTML = `<i data-lucide="package" class="w-8 h-8 text-white animate-bounce"></i>`;
                     
                     const deltaY = lastY - wrist.y;
-                    if (deltaY > 0.15 && !isSending && selectedFile && conn && conn.open) {
-                        sendFile();
-                    }
+                    if (deltaY > 0.18 && !isSending && selectedFile) launchFile();
+                    lastY = wrist.y;
                 } else {
-                    ui.gestureText.innerText = "Tangan Terbuka";
+                    ui.gestureText.innerText = "MENDETEKSI TANGAN";
                     ui.gestureText.classList.remove('text-blue-400');
-                    ui.gestureCircle.className = "w-24 h-24 rounded-full border-4 border-dashed border-white/20 flex items-center justify-center transition-all";
-                    ui.gestureIcon.innerHTML = `<i data-lucide="hand" class="w-10 h-10 text-white/30"></i>`;
+                    ui.portal.classList.replace('bg-blue-500/20', 'portal-gradient');
+                    ui.handIcon.innerHTML = `<i data-lucide="hand" class="w-8 h-8 text-white/30"></i>`;
+                    lastY = wrist.y;
                 }
-                lastY = wrist.y;
                 lucide.createIcons();
             } else {
-                ui.gestureText.innerText = "Mencari Tangan";
+                ui.gestureText.innerText = "POSISIKAN TANGAN";
             }
             ctx.restore();
         }
@@ -384,17 +476,10 @@
         hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.8, minTrackingConfidence: 0.8 });
         hands.onResults(onResults);
 
-        const camera = new Camera(document.getElementById('input-video'), {
-            onFrame: async () => { await hands.send({image: document.getElementById('input-video')}); },
-            width: 640, height: 640
-        });
-
         window.onload = () => {
-            initPeer();
-            camera.start().then(() => {
-                canvas.width = 640;
-                canvas.height = 640;
-            });
+            initializePeer();
+            canvas.width = 640;
+            canvas.height = 640;
         };
     </script>
 </body>
